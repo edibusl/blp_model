@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Enum
+from sqlalchemy.orm import relationship
 from orm import Base
+from orm.level import BlpLevel
 
 
 class User(Base):
@@ -7,6 +9,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String)
+    level = Column(Enum(BlpLevel), default=BlpLevel.UNCLASSIFIED)
     email = Column(String)
     password = Column(String)
     salt = Column(String)
@@ -15,5 +18,6 @@ class User(Base):
         return {
             'id': self.id,
             'name': self.name,
-            'email': self.email
+            'email': self.email,
+            'level': self.level.name
         }

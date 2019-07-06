@@ -3,8 +3,9 @@ from werkzeug.exceptions import Unauthorized
 from api_utils import ApiErorrCode, api_ok, api_error
 import db_manager
 from orm.user import User
+from orm.file import File
 import auth
-
+import file_manager
 
 bp_endpoints = Blueprint('gw_endpoints', __name__)
 
@@ -22,7 +23,7 @@ def users_create():
 
         # Create the user
         hashed_pass, salt = auth.pass_to_hash(data['password'])
-        user = User(name=data['name'], email=data.get('email', None), password=hashed_pass, salt=salt)
+        user = User(name=data['name'], email=data.get('email', None), password=hashed_pass, salt=salt, level=data['level'])
         session.add(user)
         session.commit()
 
@@ -64,3 +65,59 @@ def login():
             return jsonify({'id': user.id})
         else:
             return login_error()
+
+
+@bp_endpoints.route('/files', methods=['POST'])
+@auth.requires_auth()
+def files_create():
+    data = request.get_json()
+    user_id = auth.get_current_user_id()
+
+    with db_manager.session_scope() as session:
+        # Get user from DB
+        user = session.query(User).get(user_id)
+
+        # Verify that user exists
+        if not user:
+            return api_error(http_code=Unauthorized.code, api_result_code=ApiErorrCode.UNAUTHORIZED)
+
+        # Verify that file doesn't exist yet
+        file = session.query(File).filter(File.filename == data['filename']).all()
+        if file:
+            return api_error(api_result_code=ApiErorrCode.FILE_ALREADY_EXISTS)
+
+        # Create the file in DB with the same level of the owner user
+        file = File(filename=data['filename'], level=user.level, owner=user)
+        session.add(file)
+        session.commit()
+
+        # Create the file on the filesystem
+        file_manager.create_file(file.filename)
+
+        return jsonify(file.to_dict())
+
+
+@bp_endpoints.route('/files', methods=['DELETE'])
+@auth.requires_auth()
+def files_delete():
+    data = request.get_json()
+    user_id = auth.get_current_user_id()
+
+    with db_manager.session_scope() as session:
+        # Verify that file exists
+        file = session.query(File).filter(File.filename == data['filename']).one_or_none()
+        if not file:
+            return api_error(api_result_code=ApiErorrCode.FILE_NOT_EXISTS)
+
+        # Verify that the
+        if file.owner_id != user_id:
+            return api_error(api_result_code=ApiErorrCode.UNAUTHORIZED, error_message="The file can be deleted only by its owner")
+
+        # Delete the file entry from DB
+        session.delete(file)
+        session.commit()
+
+        # Delete the file on the filesystem
+        file_manager.delete_file(data['filename'])
+
+        return api_ok()

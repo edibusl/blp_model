@@ -22,7 +22,7 @@ def requires_auth(admin_only=False):
         @wraps(func)
         def decorated_view(*args, **kwargs):
             # Get the user_id from the header
-            user_id = get_user_id_from_header()
+            user_id = _get_user_id_from_header()
             if not user_id:
                 raise Exception("Unauthorized")
 
@@ -32,7 +32,8 @@ def requires_auth(admin_only=False):
                 raise Exception("Unauthorized")
 
             # Save the user data in the flask app context
-            _app_ctx_stack.top.current_user = {'user_id': user_id}
+            # If it's not ADMIN, then cast to int
+            _app_ctx_stack.top.current_user = {'user_id': int(user_id) if user_id != 'ADMIN' else user_id}
 
             # User must have ANY of the listed roles
             return func(*args, **kwargs)
@@ -41,7 +42,7 @@ def requires_auth(admin_only=False):
     return wrapper
 
 
-def get_user_id_from_header():
+def _get_user_id_from_header():
     """
     # TODO - Right now we take the user id from header.
     # In a real production app we need to take from the Authorization header the access token of the user (which was generated in an OAuth process)
@@ -50,3 +51,7 @@ def get_user_id_from_header():
     user_id = auth
 
     return user_id
+
+
+def get_current_user_id():
+    return _app_ctx_stack.top.current_user['user_id']
