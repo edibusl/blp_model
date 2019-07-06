@@ -16,7 +16,7 @@ def pass_to_hash(password, salt=None):
 
 def requires_auth(admin_only=False):
     """
-    # Verifies that the user_id was passed in the Authorization header
+    Verifies that the user_id was passed in the Authorization header
     """
     def wrapper(func):
         @wraps(func)
@@ -35,7 +35,6 @@ def requires_auth(admin_only=False):
             # If it's not ADMIN, then cast to int
             _app_ctx_stack.top.current_user = {'user_id': int(user_id) if user_id != 'ADMIN' else user_id}
 
-            # User must have ANY of the listed roles
             return func(*args, **kwargs)
 
         return decorated_view
