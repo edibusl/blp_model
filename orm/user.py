@@ -10,3 +10,10 @@ class User(Base):
     email = Column(String)
     password = Column(String)
     salt = Column(String)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'email': self.email
+        }

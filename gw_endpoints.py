@@ -10,6 +10,7 @@ bp_endpoints = Blueprint('gw_endpoints', __name__)
 
 
 @bp_endpoints.route('/users', methods=['POST'])
+@auth.requires_auth(admin_only=True)
 def users_create():
     data = request.get_json()
 
@@ -25,18 +26,21 @@ def users_create():
         session.add(user)
         session.commit()
 
-    return api_ok()
+        return jsonify(user.to_dict())
 
 
 @bp_endpoints.route('/users/<user_id>', methods=['DELETE'])
+@auth.requires_auth(admin_only=True)
 def users_delete(user_id):
     with db_manager.session_scope() as session:
         user = session.query(User).get(user_id)
-        if user:
+        if not user:
+            return api_error()
+        else:
             session.delete(user)
             session.commit()
 
-    return api_ok()
+            return api_ok()
 
 
 @bp_endpoints.route('/login', methods=['POST'])
