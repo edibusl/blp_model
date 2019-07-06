@@ -7,7 +7,7 @@ class ApiErorrCode(enum.Enum):
     USER_EXISTS = 2
     UNAUTHORIZED = 3
     FILE_ALREADY_EXISTS = 4
-    FILE_NOT_EXISTS = 4
+    FILE_NOT_EXISTS = 5
 
 
 def api_error(http_code=400, api_result_code=None, error_message=None):

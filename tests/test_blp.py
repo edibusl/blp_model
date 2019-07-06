@@ -174,7 +174,7 @@ def test_create_delete_files(client):
     # Try to delete the file of user1 by user2
     # Exception should be thrown since the file belongs to user1
     r, s = delete(client, '/files', {'filename': filename}, access_token=user2['id'])
-    assert s == 400
+    assert s == 401
 
     # Delete the file by the right user - now it should succeed
     r, s = delete(client, '/files', {'filename': filename}, access_token=user1['id'])
@@ -227,7 +227,7 @@ def test_read_write_files(client):
     assert r['content'] == (str2 + str3)
 
 
-def create_blp_users():
+def create_blp_users(client):
     junior = {
         'email': 'junior@gmail.com',
         'password': 'Qwer1234!',
@@ -277,11 +277,15 @@ def read_file(client, user_id, filename):
     return get(client, '/files/{}'.format(urllib.parse.quote(filename)), access_token=user_id)
 
 
+def append_file(client, user_id, filename, content):
+    return patch(client, '/files', {'filename': filename, 'content': content}, access_token=user_id)
+
+
 def test_blp_no_read_up(client):
     # Create users with different BLP clearance levels
-    junior, mid1, mid2, senior = create_blp_users()
+    junior, mid1, mid2, senior = create_blp_users(client)
 
-    # Each user creates a file and write some text to it
+    # Each user creates a file and writes some text to it
     create_file_and_write(client, junior['id'], 'unclassified.txt', "Nothing interesting")
     create_file_and_write(client, mid1['id'], 'secret1.txt', "Something very secret 1")
     create_file_and_write(client, mid2['id'], 'secret2.txt', "Something very secret 2")
@@ -310,3 +314,41 @@ def test_blp_no_read_up(client):
     # Verify that junior can't read files above his level
     r, s = read_file(client, junior['id'], 'secret1.txt')
     assert s == 401
+    assert r['api_result_code'] == ApiErorrCode.UNAUTHORIZED.name
+
+
+def test_blp_no_write_down(client):
+    # Create users with different BLP clearance levels
+    junior, mid1, mid2, senior = create_blp_users(client)
+
+    # Each user creates a file and writes some text to it
+    create_file_and_write(client, junior['id'], 'unclassified.txt', "Nothing interesting")
+    create_file_and_write(client, mid1['id'], 'secret1.txt', "Something very secret 1")
+    create_file_and_write(client, mid2['id'], 'secret2.txt', "Something very secret 2")
+    create_file_and_write(client, senior['id'], 'topsecret.txt', "Something very very secret")
+
+    # Verify that mid1 can write to the file of mid2 and vice versa
+    text_to_append = "\nappending write down test text."
+    r, s = append_file(client, mid1['id'], 'secret2.txt', text_to_append)
+    assert s == 200
+    r, s = append_file(client, mid2['id'], 'secret1.txt', text_to_append)
+    assert s == 200
+
+    # Verify that junior can write to his own file
+    r, s = append_file(client, junior['id'], 'unclassified.txt', text_to_append)
+    assert s == 200
+
+    # Verify that junior can write to everyone elses files
+    r, s = append_file(client, junior['id'], 'topsecret.txt', text_to_append)
+    assert s == 200
+    r, s = append_file(client, junior['id'], 'secret1.txt', text_to_append)
+    assert s == 200
+    r, s = append_file(client, junior['id'], 'secret2.txt', text_to_append)
+    assert s == 200
+    r, s = append_file(client, junior['id'], 'unclassified.txt', text_to_append)
+    assert s == 200
+
+    # Verify that senior can't read files below his level
+    r, s = append_file(client, senior['id'], 'secret1.txt', text_to_append)
+    assert s == 401
+    assert r['api_result_code'] == ApiErorrCode.UNAUTHORIZED.name

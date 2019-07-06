@@ -6,6 +6,7 @@ from orm.user import User
 from orm.file import File
 import auth
 import file_manager
+import blp_rules
 
 bp_endpoints = Blueprint('gw_endpoints', __name__)
 
@@ -111,7 +112,7 @@ def files_delete():
 
         # Verify that the user who tries to delete the file is the owner of the file
         if file.owner_id != user_id:
-            return api_error(api_result_code=ApiErorrCode.UNAUTHORIZED, error_message="The file can be deleted only by its owner")
+            return api_error(http_code=Unauthorized.code, api_result_code=ApiErorrCode.UNAUTHORIZED, error_message="The file can be deleted only by its owner")
 
         # Delete the file entry from DB
         session.delete(file)
@@ -126,23 +127,17 @@ def files_delete():
 @bp_endpoints.route('/files', methods=['PUT'])
 @auth.requires_auth()
 def files_write():
-    data = request.get_json()
-
-    with db_manager.session_scope() as session:
-        # Verify that file exists
-        file = session.query(File).filter(File.filename == data['filename']).one_or_none()
-        if not file:
-            return api_error(api_result_code=ApiErorrCode.FILE_NOT_EXISTS)
-
-        # Write to the file
-        file_manager.write_file(file.filename, data['content'])
-
-        return api_ok()
+    return write_or_append(file_manager.write_file)
 
 
 @bp_endpoints.route('/files', methods=['PATCH'])
 @auth.requires_auth()
 def files_append():
+    return write_or_append(file_manager.append_file)
+
+
+def write_or_append(write_func):
+    user_id = auth.get_current_user_id()
     data = request.get_json()
 
     with db_manager.session_scope() as session:
@@ -151,8 +146,17 @@ def files_append():
         if not file:
             return api_error(api_result_code=ApiErorrCode.FILE_NOT_EXISTS)
 
+        # Get the user from DB
+        user = session.query(User).get(user_id)
+        if not user:
+            return api_error(http_code=Unauthorized.code, api_result_code=ApiErorrCode.UNAUTHORIZED)
+
+        # Enforce BLP no write down
+        if not blp_rules.enforce_blp_write(user.level, file.level):
+            return api_error(http_code=Unauthorized.code, api_result_code=ApiErorrCode.UNAUTHORIZED)
+
         # Write to the file
-        file_manager.append_file(file.filename, data['content'])
+        write_func(file.filename, data['content'])
 
         return api_ok()
 
@@ -160,11 +164,22 @@ def files_append():
 @bp_endpoints.route('/files/<filename>', methods=['GET'])
 @auth.requires_auth()
 def files_read(filename):
+    user_id = auth.get_current_user_id()
+
     with db_manager.session_scope() as session:
         # Verify that file exists
         file = session.query(File).filter(File.filename == filename).one_or_none()
         if not file:
             return api_error(api_result_code=ApiErorrCode.FILE_NOT_EXISTS)
+
+        # Get the user from DB
+        user = session.query(User).get(user_id)
+        if not user:
+            return api_error(http_code=Unauthorized.code, api_result_code=ApiErorrCode.UNAUTHORIZED)
+
+        # Enforce BLP no write down
+        if not blp_rules.enforce_blp_read(user.level, file.level):
+            return api_error(http_code=Unauthorized.code, api_result_code=ApiErorrCode.UNAUTHORIZED)
 
         # Read from the file
         content = file_manager.read_file(file.filename)
