@@ -14,6 +14,10 @@ def init_filemanager(purge):
     file_manager.init(purge)
 
 
+def purge_filesystem():
+    file_manager.purge_filesystem()
+
+
 def start_flask():
     app = Flask(__name__)
     app.register_blueprint(bp_endpoints)

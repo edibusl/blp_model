@@ -109,7 +109,7 @@ def files_delete():
         if not file:
             return api_error(api_result_code=ApiErorrCode.FILE_NOT_EXISTS)
 
-        # Verify that the
+        # Verify that the user who tries to delete the file is the owner of the file
         if file.owner_id != user_id:
             return api_error(api_result_code=ApiErorrCode.UNAUTHORIZED, error_message="The file can be deleted only by its owner")
 
@@ -121,3 +121,52 @@ def files_delete():
         file_manager.delete_file(data['filename'])
 
         return api_ok()
+
+
+@bp_endpoints.route('/files', methods=['PUT'])
+@auth.requires_auth()
+def files_write():
+    data = request.get_json()
+
+    with db_manager.session_scope() as session:
+        # Verify that file exists
+        file = session.query(File).filter(File.filename == data['filename']).one_or_none()
+        if not file:
+            return api_error(api_result_code=ApiErorrCode.FILE_NOT_EXISTS)
+
+        # Write to the file
+        file_manager.write_file(file.filename, data['content'])
+
+        return api_ok()
+
+
+@bp_endpoints.route('/files', methods=['PATCH'])
+@auth.requires_auth()
+def files_append():
+    data = request.get_json()
+
+    with db_manager.session_scope() as session:
+        # Verify that file exists
+        file = session.query(File).filter(File.filename == data['filename']).one_or_none()
+        if not file:
+            return api_error(api_result_code=ApiErorrCode.FILE_NOT_EXISTS)
+
+        # Write to the file
+        file_manager.append_file(file.filename, data['content'])
+
+        return api_ok()
+
+
+@bp_endpoints.route('/files/<filename>', methods=['GET'])
+@auth.requires_auth()
+def files_read(filename):
+    with db_manager.session_scope() as session:
+        # Verify that file exists
+        file = session.query(File).filter(File.filename == filename).one_or_none()
+        if not file:
+            return api_error(api_result_code=ApiErorrCode.FILE_NOT_EXISTS)
+
+        # Read from the file
+        content = file_manager.read_file(file.filename)
+
+        return jsonify({'content': content})
